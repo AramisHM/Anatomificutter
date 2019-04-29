@@ -9,7 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
+
+	"github.com/nfnt/resize"
 )
 
 func printUsage() {
@@ -29,11 +30,11 @@ param 2 - Coronal cut depth
 // GetImageLen - Get image length from a file
 func GetImageLen(filePath os.FileInfo) int {
 	tmpFile, err := os.Open(filePath.Name())
+	defer tmpFile.Close()
 	if err != nil {
-		fmt.Println("Image file couldn't be opened.")
+		fmt.Println("Image file couldn't be opened to get image length.")
 		os.Exit(1)
 	}
-	defer tmpFile.Close()
 	imageToGetLenth, _, err := image.Decode(tmpFile)
 	lineLen := imageToGetLenth.Bounds().Dx()
 
@@ -84,9 +85,7 @@ func main() {
 	if counter > 0 {
 		// Get image length
 		//lineHeight := 0
-		lineLen := GetImageLen(theFiles[0])
-
-		width := lineLen
+		width := GetImageLen(theFiles[0])
 		height := counter
 
 		upLeft := image.Point{0, 0}
@@ -96,7 +95,7 @@ func main() {
 		for y, f := range theFiles {
 			fullPathFile := f.Name()
 			fileExt := filepath.Ext(fullPathFile)
-			fileNameOnly := strings.TrimSuffix(fullPathFile, filepath.Ext(fullPathFile))
+			//fileNameOnly := strings.TrimSuffix(fullPathFile, filepath.Ext(fullPathFile))
 
 			// only .png files allowed
 			if fileExt != ".png" {
@@ -106,10 +105,10 @@ func main() {
 			imgfile, err := os.Open(fullPathFile)
 			if err != nil {
 				fmt.Println("Image file couldn't be opened.")
-				os.Exit(1)
+				imgfile.Close()
+				continue
+				//os.Exit(1)
 			}
-			defer imgfile.Close()
-
 			imgFromFile, _, err := image.Decode(imgfile)
 
 			// Set color for each pixel.
@@ -117,10 +116,14 @@ func main() {
 				color := imgFromFile.At(x, (int)(cutDepth))
 				img.Set(x, y, color)
 			}
+			imgfile.Close()
 
-			// Encode as PNG.
-			f, _ := os.Create("out-" + fileNameOnly + ".png")
-			png.Encode(f, img)
 		}
+		//resize
+		resizedImage := resize.Resize((uint)(width), (uint)(height/2), img, resize.Lanczos3)
+
+		// Encode as PNG.
+		f, _ := os.Create("out-resized-" + argsWithoutProg[1] + ".png")
+		png.Encode(f, resizedImage)
 	}
 }
