@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/nfnt/resize"
 )
@@ -68,6 +69,47 @@ func GetFilesFromExtension(extension string, path string) (int, []os.FileInfo) {
 	return counter, theFiles
 }
 
+// GenerateCorCutOnZ
+func GenerateCorCutOnZ(int zLevel, targetDir string, theFiles []os.FileInfo) {
+	width := GetImageLen(theFiles[0])
+	height := len(theFiles[0])
+
+	upLeft := image.Point{0, 0}
+	lowRight := image.Point{width, height}
+	img := image.NewRGBA(image.Rectangle{upLeft, lowRight})
+
+	for y, f := range theFiles {
+		fullPathFile := f.Name()
+		fileExt := filepath.Ext(fullPathFile)
+		fileNameWithoutExt := strings.TrimSuffix(fullPathFile, filepath.Ext(fullPathFile))
+		if fileExt != ".png" {
+			continue
+		}
+
+		imgfile, err := os.Open(fullPathFile)
+		if err != nil {
+			fmt.Println("Image file couldn't be opened.")
+			imgfile.Close()
+			continue
+		}
+		imgFromFile, _, err := image.Decode(imgfile)
+
+		// Set color for each pixel.
+		for x := 0; x < width; x++ {
+			color := imgFromFile.At(x, zLevel)
+			img.Set(x, y, color)
+		}
+		imgfile.Close()
+
+	}
+	//resize
+	resizedImage := resize.Resize((uint)(width), (uint)(height/2), img, resize.Lanczos3)
+
+	// Encode as PNG.
+	f, _ := os.Create(targetDir + fileNameWithoutExt + ".png")
+	png.Encode(f, resizedImage)
+}
+
 func main() {
 
 	// Get arguments
@@ -79,51 +121,13 @@ func main() {
 	}
 
 	cutDepth, _ := strconv.ParseInt(argsWithoutProg[1], 10, 64)
-
 	counter, theFiles := GetFilesFromExtension("png", argsWithoutProg[0])
 
+	path := "./out"
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		os.Mkdir(path, 0755)
+	}
 	if counter > 0 {
-		// Get image length
-		//lineHeight := 0
-		width := GetImageLen(theFiles[0])
-		height := counter
-
-		upLeft := image.Point{0, 0}
-		lowRight := image.Point{width, height}
-		img := image.NewRGBA(image.Rectangle{upLeft, lowRight})
-
-		for y, f := range theFiles {
-			fullPathFile := f.Name()
-			fileExt := filepath.Ext(fullPathFile)
-			//fileNameOnly := strings.TrimSuffix(fullPathFile, filepath.Ext(fullPathFile))
-
-			// only .png files allowed
-			if fileExt != ".png" {
-				continue
-			}
-
-			imgfile, err := os.Open(fullPathFile)
-			if err != nil {
-				fmt.Println("Image file couldn't be opened.")
-				imgfile.Close()
-				continue
-				//os.Exit(1)
-			}
-			imgFromFile, _, err := image.Decode(imgfile)
-
-			// Set color for each pixel.
-			for x := 0; x < width; x++ {
-				color := imgFromFile.At(x, (int)(cutDepth))
-				img.Set(x, y, color)
-			}
-			imgfile.Close()
-
-		}
-		//resize
-		resizedImage := resize.Resize((uint)(width), (uint)(height/2), img, resize.Lanczos3)
-
-		// Encode as PNG.
-		f, _ := os.Create("out-resized-" + argsWithoutProg[1] + ".png")
-		png.Encode(f, resizedImage)
+		GenerateCorCutOnZ(256, "./", theFiles)
 	}
 }
