@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/nfnt/resize"
 )
@@ -23,7 +22,7 @@ USAGE
 
 param 1 - Input directory
 
-param 2 - Coronal cut depth
+param 2 - Output directory
 `)
 	os.Exit(0)
 }
@@ -70,9 +69,9 @@ func GetFilesFromExtension(extension string, path string) (int, []os.FileInfo) {
 }
 
 // GenerateCorCutOnZ
-func GenerateCorCutOnZ(int zLevel, targetDir string, theFiles []os.FileInfo) {
+func GenerateCorCutOnZ(zLevel int, targetDir string, theFiles []os.FileInfo) {
 	width := GetImageLen(theFiles[0])
-	height := len(theFiles[0])
+	height := len(theFiles)
 
 	upLeft := image.Point{0, 0}
 	lowRight := image.Point{width, height}
@@ -81,7 +80,6 @@ func GenerateCorCutOnZ(int zLevel, targetDir string, theFiles []os.FileInfo) {
 	for y, f := range theFiles {
 		fullPathFile := f.Name()
 		fileExt := filepath.Ext(fullPathFile)
-		fileNameWithoutExt := strings.TrimSuffix(fullPathFile, filepath.Ext(fullPathFile))
 		if fileExt != ".png" {
 			continue
 		}
@@ -106,7 +104,8 @@ func GenerateCorCutOnZ(int zLevel, targetDir string, theFiles []os.FileInfo) {
 	resizedImage := resize.Resize((uint)(width), (uint)(height/2), img, resize.Lanczos3)
 
 	// Encode as PNG.
-	f, _ := os.Create(targetDir + fileNameWithoutExt + ".png")
+
+	f, _ := os.Create(targetDir + strconv.Itoa(zLevel) + ".png")
 	png.Encode(f, resizedImage)
 }
 
@@ -120,7 +119,6 @@ func main() {
 		printUsage()
 	}
 
-	cutDepth, _ := strconv.ParseInt(argsWithoutProg[1], 10, 64)
 	counter, theFiles := GetFilesFromExtension("png", argsWithoutProg[0])
 
 	path := "./out"
@@ -128,6 +126,8 @@ func main() {
 		os.Mkdir(path, 0755)
 	}
 	if counter > 0 {
-		GenerateCorCutOnZ(256, "./", theFiles)
+		for i := 0; i < counter; i++ {
+			GenerateCorCutOnZ(i, "./out/", theFiles)
+		}
 	}
 }
