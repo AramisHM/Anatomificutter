@@ -185,7 +185,7 @@ func DoSagital(theFiles []os.FileInfo) {
 	}
 	if len(theFiles) > 0 {
 
-		numCuts := GetImageHeight(theFiles[0])
+		numCuts := GetImageLen(theFiles[0])
 		for i := 0; i < numCuts; i++ {
 			GenerateCorCutOnZ(i, path, theFiles)
 		}
