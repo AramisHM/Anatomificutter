@@ -187,7 +187,7 @@ func DoSagital(theFiles []os.FileInfo) {
 
 		numCuts := GetImageLen(theFiles[0])
 		for i := 0; i < numCuts; i++ {
-			GenerateCorCutOnZ(i, path, theFiles)
+			GenerateSagCutOnX(i, path, theFiles)
 		}
 	}
 }
