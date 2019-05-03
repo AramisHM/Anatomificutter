@@ -41,6 +41,20 @@ func GetImageLen(filePath os.FileInfo) int {
 	return lineLen
 }
 
+// GetImageHeight - Get image height from a file
+func GetImageHeight(filePath os.FileInfo) int {
+	tmpFile, err := os.Open(filePath.Name())
+	defer tmpFile.Close()
+	if err != nil {
+		fmt.Println("Image file couldn't be opened to get image length.")
+		os.Exit(1)
+	}
+	imageToGetLenth, _, err := image.Decode(tmpFile)
+	lineHeight := imageToGetLenth.Bounds().Dy()
+
+	return lineHeight
+}
+
 // GetFilesFromExtension
 func GetFilesFromExtension(extension string, path string) (int, []os.FileInfo) {
 
@@ -126,7 +140,9 @@ func main() {
 		os.Mkdir(path, 0755)
 	}
 	if counter > 0 {
-		for i := 0; i < counter; i++ {
+
+		numCuts := GetImageHeight(theFiles[0])
+		for i := 0; i < numCuts; i++ {
 			GenerateCorCutOnZ(i, "./out/", theFiles)
 		}
 	}
