@@ -20,9 +20,9 @@ func printUsage() {
 
 USAGE
 
-param 1 - Input directory
+param 1 - input path
 
-param 2 - Output directory
+param 2 - "sagital" or "coronal"
 `)
 	os.Exit(0)
 }
@@ -119,31 +119,99 @@ func GenerateCorCutOnZ(zLevel int, targetDir string, theFiles []os.FileInfo) {
 
 	// Encode as PNG.
 
-	f, _ := os.Create(targetDir + strconv.Itoa(zLevel) + ".png")
+	f, _ := os.Create(targetDir + "/" + strconv.Itoa(zLevel) + ".png")
 	png.Encode(f, resizedImage)
 }
 
+// GenerateCorCutOnZ
+func GenerateSagCutOnX(xLevel int, targetDir string, theFiles []os.FileInfo) {
+	width := GetImageHeight(theFiles[0])
+	height := len(theFiles)
+
+	upLeft := image.Point{0, 0}
+	lowRight := image.Point{width, height}
+	img := image.NewRGBA(image.Rectangle{upLeft, lowRight})
+
+	for y, f := range theFiles {
+		fullPathFile := f.Name()
+		fileExt := filepath.Ext(fullPathFile)
+		if fileExt != ".png" {
+			continue
+		}
+
+		imgfile, err := os.Open(fullPathFile)
+		if err != nil {
+			fmt.Println("Image file couldn't be opened.")
+			imgfile.Close()
+			continue
+		}
+		imgFromFile, _, err := image.Decode(imgfile)
+
+		// Set color for each pixel.
+		for x := 0; x < width; x++ {
+			color := imgFromFile.At(xLevel, x)
+			img.Set(x, y, color)
+		}
+		imgfile.Close()
+
+	}
+	//resize
+	resizedImage := resize.Resize((uint)(width), (uint)(height/2), img, resize.Lanczos3)
+
+	// Encode as PNG.
+
+	f, _ := os.Create(targetDir + "/" + strconv.Itoa(xLevel) + ".png")
+	png.Encode(f, resizedImage)
+}
+
+func DoCoronal(theFiles []os.FileInfo) {
+	path := "./coronal-out"
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		os.Mkdir(path, 0755)
+	}
+	if len(theFiles) > 0 {
+
+		numCuts := GetImageHeight(theFiles[0])
+		for i := 0; i < numCuts; i++ {
+			GenerateCorCutOnZ(i, path, theFiles)
+		}
+	}
+}
+
+func DoSagital(theFiles []os.FileInfo) {
+	path := "./sagital-out"
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		os.Mkdir(path, 0755)
+	}
+	if len(theFiles) > 0 {
+
+		numCuts := GetImageHeight(theFiles[0])
+		for i := 0; i < numCuts; i++ {
+			GenerateCorCutOnZ(i, path, theFiles)
+		}
+	}
+}
 func main() {
 
 	// Get arguments
 	argsWithoutProg := os.Args[1:]
 
 	// Get the parameters
-	if len(argsWithoutProg) < 2 {
+	if len(argsWithoutProg) < 1 {
 		printUsage()
 	}
 
 	counter, theFiles := GetFilesFromExtension("png", argsWithoutProg[0])
 
-	path := "./out"
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		os.Mkdir(path, 0755)
-	}
 	if counter > 0 {
+		processType := argsWithoutProg[1]
 
-		numCuts := GetImageHeight(theFiles[0])
-		for i := 0; i < numCuts; i++ {
-			GenerateCorCutOnZ(i, "./out/", theFiles)
+		switch processType {
+		case "coronal":
+			DoCoronal(theFiles)
+		case "sagital":
+			DoSagital(theFiles)
 		}
 	}
+
 }
