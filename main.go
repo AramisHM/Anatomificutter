@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
+	"unsafe"
 
 	"github.com/nfnt/resize"
 )
@@ -23,9 +25,14 @@ USAGE
 param 1 - input path
 
 param 2 - "sagital" or "coronal"
+
+param 3 - max RAM memory to use in Mega Bytes (MB)
 `)
 	os.Exit(0)
 }
+
+// bunch of images
+var images []image.Image
 
 // GetImageLen - Get image length from a file
 func GetImageLen(filePath os.FileInfo) int {
@@ -164,7 +171,7 @@ func GenerateSagCutOnX(xLevel int, targetDir string, theFiles []os.FileInfo) {
 	png.Encode(f, resizedImage)
 }
 
-func DoCoronal(theFiles []os.FileInfo) {
+func DoCoronal(theFiles []os.FileInfo, maxMem int) {
 	path := "./coronal-out"
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		os.Mkdir(path, 0755)
@@ -178,7 +185,7 @@ func DoCoronal(theFiles []os.FileInfo) {
 	}
 }
 
-func DoSagital(theFiles []os.FileInfo) {
+func DoSagital(theFiles []os.FileInfo, maxMem int) {
 	path := "./sagital-out"
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		os.Mkdir(path, 0755)
@@ -191,9 +198,43 @@ func DoSagital(theFiles []os.FileInfo) {
 		}
 	}
 }
+
+// LoadStressTest - Loads files from a directory and print how much memory it
+// used to do so.
+func LoadStressTest(files []os.FileInfo, path string) {
+
+	var images []image.Image
+	sizeMB := 0
+	overheadPerFile := 40 // an approximate size in bytes that each variable might hold (estimation)
+	for _, f := range files {
+		fullPathFile := f.Name()
+		fileExt := filepath.Ext(fullPathFile)
+		if fileExt != ".png" {
+			continue
+		}
+
+		imgfile, err := os.Open(path + "/" + fullPathFile)
+		if err != nil {
+			fmt.Println("Image file couldn't be opened.")
+			imgfile.Close()
+			continue
+		}
+		img, _, err := image.Decode(imgfile)
+
+		images = append(images, img)
+		fi, _ := imgfile.Stat()
+		sizeMB += (int)(fi.Size()) + overheadPerFile
+		imgfile.Close()
+
+	}
+	fmt.Println("Used about ", sizeMB/1000, " MB(s) to load ", len(files), " files from folder ", path)
+	time.Sleep(30 * time.Second)
+}
+
 func main() {
 
-	// Get arguments
+	var maxMem int
+
 	argsWithoutProg := os.Args[1:]
 
 	// Get the parameters
@@ -201,7 +242,15 @@ func main() {
 		printUsage()
 	}
 
+	if len(argsWithoutProg) > 2 {
+		maxMem, _ = strconv.Atoi(argsWithoutProg[3])
+	} else {
+		maxMem = 80
+	}
+
 	counter, theFiles := GetFilesFromExtension("png", argsWithoutProg[0])
+
+	fmt.Println(unsafe.Sizeof(images))
 
 	if counter > 0 {
 		processType := argsWithoutProg[1]
@@ -211,7 +260,8 @@ func main() {
 			DoCoronal(theFiles)
 		case "sagital":
 			DoSagital(theFiles)
+		case "stress":
+			LoadStressTest(theFiles, argsWithoutProg[0])
 		}
 	}
-
 }

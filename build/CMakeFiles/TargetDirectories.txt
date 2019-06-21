@@ -1,5 +1,0 @@
-/home/aramis/Desktop/Anatomificutter/build/CMakeFiles/rebuild_cache.dir
-/home/aramis/Desktop/Anatomificutter/build/CMakeFiles/edit_cache.dir
-/home/aramis/Desktop/Anatomificutter/build/source/CMakeFiles/rebuild_cache.dir
-/home/aramis/Desktop/Anatomificutter/build/source/CMakeFiles/edit_cache.dir
-/home/aramis/Desktop/Anatomificutter/build/source/CMakeFiles/anatomificutter.dir

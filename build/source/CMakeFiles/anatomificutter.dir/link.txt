@@ -1,1 +1,0 @@
-/usr/bin/g++-7  -g  -rdynamic CMakeFiles/anatomificutter.dir/ahmbmp.cpp.o CMakeFiles/anatomificutter.dir/ahmutils.cpp.o CMakeFiles/anatomificutter.dir/main.cpp.o  -o ../../bin/anatomificutter 
