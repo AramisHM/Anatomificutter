@@ -3,16 +3,13 @@ package main
 import (
 	"fmt"
 	"image"
+	"image/draw"
 	"image/png"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
-	"unsafe"
-
-	"github.com/nfnt/resize"
 )
 
 func printUsage() {
@@ -31,35 +28,14 @@ param 3 - max RAM memory to use in Mega Bytes (MB)
 	os.Exit(0)
 }
 
-// bunch of images
-var images []image.Image
-
-// GetImageLen - Get image length from a file
-func GetImageLen(filePath os.FileInfo) int {
-	tmpFile, err := os.Open(filePath.Name())
-	defer tmpFile.Close()
-	if err != nil {
-		fmt.Println("Image file couldn't be opened to get image length.")
-		os.Exit(1)
+// Exists reports whether the named file or directory exists.
+func Exists(name string) bool {
+	if _, err := os.Stat(name); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
 	}
-	imageToGetLenth, _, err := image.Decode(tmpFile)
-	lineLen := imageToGetLenth.Bounds().Dx()
-
-	return lineLen
-}
-
-// GetImageHeight - Get image height from a file
-func GetImageHeight(filePath os.FileInfo) int {
-	tmpFile, err := os.Open(filePath.Name())
-	defer tmpFile.Close()
-	if err != nil {
-		fmt.Println("Image file couldn't be opened to get image length.")
-		os.Exit(1)
-	}
-	imageToGetLenth, _, err := image.Decode(tmpFile)
-	lineHeight := imageToGetLenth.Bounds().Dy()
-
-	return lineHeight
+	return true
 }
 
 // GetFilesFromExtension
@@ -88,147 +64,98 @@ func GetFilesFromExtension(extension string, path string) (int, []os.FileInfo) {
 
 	return counter, theFiles
 }
-
-// GenerateCorCutOnZ
-func GenerateCorCutOnZ(zLevel int, targetDir string, theFiles []os.FileInfo) {
-	width := GetImageLen(theFiles[0])
-	height := len(theFiles)
-
-	upLeft := image.Point{0, 0}
-	lowRight := image.Point{width, height}
-	img := image.NewRGBA(image.Rectangle{upLeft, lowRight})
-
-	for y, f := range theFiles {
-		fullPathFile := f.Name()
-		fileExt := filepath.Ext(fullPathFile)
-		if fileExt != ".png" {
-			continue
-		}
-
-		imgfile, err := os.Open(fullPathFile)
-		if err != nil {
-			fmt.Println("Image file couldn't be opened.")
-			imgfile.Close()
-			continue
-		}
-		imgFromFile, _, err := image.Decode(imgfile)
-
-		// Set color for each pixel.
-		for x := 0; x < width; x++ {
-			color := imgFromFile.At(x, zLevel)
-			img.Set(x, y, color)
-		}
-		imgfile.Close()
-
-	}
-	//resize
-	resizedImage := resize.Resize((uint)(width), (uint)(height/2), img, resize.Lanczos3)
-
-	// Encode as PNG.
-
-	f, _ := os.Create(targetDir + "/" + strconv.Itoa(zLevel) + ".png")
-	png.Encode(f, resizedImage)
+func CloneToRGBA(src image.Image) *image.RGBA {
+	b := src.Bounds()
+	dst := image.NewRGBA(b)
+	draw.Draw(dst, b, src, b.Min, draw.Src)
+	return dst
 }
 
 // GenerateCorCutOnZ
-func GenerateSagCutOnX(xLevel int, targetDir string, theFiles []os.FileInfo) {
-	width := GetImageHeight(theFiles[0])
-	height := len(theFiles)
+func GenerateCorCutOnZ(zLevel int, startYIndex int, targetDir string, imgs []image.Image, finalHeight int) {
+	width := imgs[0].Bounds().Dx()
+	height := finalHeight
 
-	upLeft := image.Point{0, 0}
-	lowRight := image.Point{width, height}
-	img := image.NewRGBA(image.Rectangle{upLeft, lowRight})
+	targFileName := targetDir + "/" + strconv.Itoa(zLevel) + ".png"
 
-	for y, f := range theFiles {
-		fullPathFile := f.Name()
-		fileExt := filepath.Ext(fullPathFile)
-		if fileExt != ".png" {
-			continue
-		}
+	var targImg *image.RGBA
 
-		imgfile, err := os.Open(fullPathFile)
-		if err != nil {
-			fmt.Println("Image file couldn't be opened.")
-			imgfile.Close()
-			continue
-		}
-		imgFromFile, _, err := image.Decode(imgfile)
+	// check if already exists, if so, keep working on the existing image.
+	if Exists(targFileName) {
+		imgfile, _ := os.Open(targFileName)
+		timg, _, _ := image.Decode(imgfile)
+		targImg = CloneToRGBA(timg)
+	} else {
+		upLeft := image.Point{0, 0}
+		lowRight := image.Point{width, height}
+		targImg = image.NewRGBA(image.Rectangle{upLeft, lowRight})
+	}
 
+	for y, origImg := range imgs {
 		// Set color for each pixel.
 		for x := 0; x < width; x++ {
-			color := imgFromFile.At(xLevel, x)
-			img.Set(x, y, color)
+			color := origImg.At(x, zLevel)
+			targImg.Set(x, (y + startYIndex), color)
 		}
-		imgfile.Close()
-
 	}
 	//resize
-	resizedImage := resize.Resize((uint)(width), (uint)(height/2), img, resize.Lanczos3)
+	//resizedImage := resize.Resize((uint)(width), (uint)(height/2), targImg, resize.Lanczos3)
 
 	// Encode as PNG.
 
-	f, _ := os.Create(targetDir + "/" + strconv.Itoa(xLevel) + ".png")
-	png.Encode(f, resizedImage)
+	f, _ := os.Create(targFileName)
+	png.Encode(f, targImg)
 }
 
-func DoCoronal(theFiles []os.FileInfo, maxMem int) {
+// DoCoronal - Generates the coronal images from a starting index,
+// returns the index where its reached the maximum amount of memory
+// allowed to do the processing
+func DoCoronal(imgs []image.Image, startIndex int, height int) {
 	path := "./coronal-out"
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		os.Mkdir(path, 0755)
 	}
-	if len(theFiles) > 0 {
+	if len(imgs) > 0 {
 
-		numCuts := GetImageHeight(theFiles[0])
+		numCuts := imgs[0].Bounds().Dy() // height
 		for i := 0; i < numCuts; i++ {
-			GenerateCorCutOnZ(i, path, theFiles)
+			GenerateCorCutOnZ(i, startIndex, path, imgs, height)
 		}
 	}
 }
 
-func DoSagital(theFiles []os.FileInfo, maxMem int) {
-	path := "./sagital-out"
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		os.Mkdir(path, 0755)
-	}
-	if len(theFiles) > 0 {
-
-		numCuts := GetImageLen(theFiles[0])
-		for i := 0; i < numCuts; i++ {
-			GenerateSagCutOnX(i, path, theFiles)
-		}
-	}
-}
-
-// LoadStressTest - Loads files from a directory and print how much memory it
-// used to do so.
-func LoadStressTest(files []os.FileInfo, path string) {
-
-	var images []image.Image
-	sizeMB := 0
-	overheadPerFile := 40 // an approximate size in bytes that each variable might hold (estimation)
-	for _, f := range files {
+func LoadFiles(startIndex int, files []os.FileInfo, path string, maxMem int) ([]image.Image, int) {
+	var imgs []image.Image
+	currIndex := 0
+	memCost := 0
+	for y, f := range files {
 		fullPathFile := f.Name()
 		fileExt := filepath.Ext(fullPathFile)
-		if fileExt != ".png" {
+		if fileExt != ".png" { // only pngs
 			continue
 		}
 
-		imgfile, err := os.Open(path + "/" + fullPathFile)
-		if err != nil {
-			fmt.Println("Image file couldn't be opened.")
+		if memCost/1000000 > maxMem {
+			break
+		}
+
+		if y > startIndex {
+			imgfile, err := os.Open(path + "/" + fullPathFile)
+			if err != nil {
+				fmt.Println("Image file couldn't be opened.")
+				imgfile.Close()
+				continue
+			}
+
+			img, _, _ := image.Decode(imgfile)
+			fi, _ := imgfile.Stat()
+			memCost += (int)(fi.Size())
+			imgs = append(imgs, img)
+			currIndex = y
 			imgfile.Close()
-			continue
 		}
-		img, _, err := image.Decode(imgfile)
-
-		images = append(images, img)
-		fi, _ := imgfile.Stat()
-		sizeMB += (int)(fi.Size()) + overheadPerFile
-		imgfile.Close()
-
 	}
-	fmt.Println("Used about ", sizeMB/1000, " MB(s) to load ", len(files), " files from folder ", path)
-	time.Sleep(30 * time.Second)
+	return imgs, currIndex + 1
 }
 
 func main() {
@@ -245,23 +172,25 @@ func main() {
 	if len(argsWithoutProg) > 2 {
 		maxMem, _ = strconv.Atoi(argsWithoutProg[3])
 	} else {
-		maxMem = 80
+		maxMem = 4000
 	}
 
 	counter, theFiles := GetFilesFromExtension("png", argsWithoutProg[0])
 
-	fmt.Println(unsafe.Sizeof(images))
-
 	if counter > 0 {
+		tempI := 0
+		i := 0
 		processType := argsWithoutProg[1]
+		var imgs []image.Image
 
-		switch processType {
-		case "coronal":
-			DoCoronal(theFiles)
-		case "sagital":
-			DoSagital(theFiles)
-		case "stress":
-			LoadStressTest(theFiles, argsWithoutProg[0])
+		for i < counter {
+
+			imgs, tempI = LoadFiles(tempI, theFiles, argsWithoutProg[0], maxMem)
+			switch processType {
+			case "convert":
+				DoCoronal(imgs, i, len(theFiles))
+				i = tempI
+			}
 		}
 	}
 }
