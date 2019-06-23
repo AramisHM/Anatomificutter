@@ -98,11 +98,37 @@ func GenerateCorCutOnZ(zLevel int, startYIndex int, targetDir string, imgs []ima
 			targImg.Set(x, (y + startYIndex), color)
 		}
 	}
-	//resize
-	//resizedImage := resize.Resize((uint)(width), (uint)(height/2), targImg, resize.Lanczos3)
+	f, _ := os.Create(targFileName)
+	png.Encode(f, targImg)
+}
 
-	// Encode as PNG.
+// GenerateSagCutOnX
+func GenerateSagCutOnX(xLevel int, startYIndex int, targetDir string, imgs []image.Image, finalHeight int) {
+	width := imgs[0].Bounds().Dy()
+	height := finalHeight
 
+	targFileName := targetDir + "/" + strconv.Itoa(xLevel) + ".png"
+
+	var targImg *image.RGBA
+
+	// check if already exists, if so, keep working on the existing image.
+	if Exists(targFileName) {
+		imgfile, _ := os.Open(targFileName)
+		timg, _, _ := image.Decode(imgfile)
+		targImg = CloneToRGBA(timg)
+	} else {
+		upLeft := image.Point{0, 0}
+		lowRight := image.Point{width, height}
+		targImg = image.NewRGBA(image.Rectangle{upLeft, lowRight})
+	}
+
+	for i, origImg := range imgs {
+		// Set color for each pixel.
+		for y := 0; y < width; y++ {
+			color := origImg.At(xLevel, y)
+			targImg.Set(y, (i + startYIndex), color)
+		}
+	}
 	f, _ := os.Create(targFileName)
 	png.Encode(f, targImg)
 }
@@ -120,6 +146,20 @@ func DoCoronal(imgs []image.Image, startIndex int, height int) {
 		numCuts := imgs[0].Bounds().Dy() // height
 		for i := 0; i < numCuts; i++ {
 			GenerateCorCutOnZ(i, startIndex, path, imgs, height)
+		}
+	}
+}
+
+func DoSagital(imgs []image.Image, startIndex int, length int) {
+	path := "./sagital-out"
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		os.Mkdir(path, 0755)
+	}
+	if len(imgs) > 0 {
+
+		numCuts := imgs[0].Bounds().Dx()
+		for i := 0; i < numCuts; i++ {
+			GenerateSagCutOnX(i, startIndex, path, imgs, length)
 		}
 	}
 }
@@ -170,9 +210,9 @@ func main() {
 	}
 
 	if len(argsWithoutProg) > 2 {
-		maxMem, _ = strconv.Atoi(argsWithoutProg[3])
+		maxMem, _ = strconv.Atoi(argsWithoutProg[2])
 	} else {
-		maxMem = 4000
+		maxMem = 100
 	}
 
 	counter, theFiles := GetFilesFromExtension("png", argsWithoutProg[0])
@@ -187,8 +227,11 @@ func main() {
 
 			imgs, tempI = LoadFiles(tempI, theFiles, argsWithoutProg[0], maxMem)
 			switch processType {
-			case "convert":
+			case "coronal":
 				DoCoronal(imgs, i, len(theFiles))
+				i = tempI
+			case "sagital":
+				DoSagital(imgs, i, len(theFiles))
 				i = tempI
 			}
 		}
